@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,8 +11,22 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { Camera, useCameraPermissions } from 'expo-camera';
-import { API_ENDPOINTS, COLORS } from './constants';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+
+const API_ENDPOINTS = {
+  REGISTER: 'http://10.196.57.169:5000/api/register', 
+  DETECT: 'http://10.196.57.169:5000/api/detect',     
+};
+
+const COLORS = {
+  PRIMARY: '#007AFF',
+  SUCCESS: '#28A745',
+  ERROR: '#DC3545',
+  BACKGROUND: '#F5F5F5',
+  WHITE: '#FFFFFF',
+  TEXT: '#333333',
+  PLACEHOLDER: '#999999',
+};
 
 const FaceDetection = () => {
   const [name, setName] = useState('');
@@ -27,10 +41,17 @@ const FaceDetection = () => {
   }, []);
 
   const requestMediaPermissions = async () => {
-    await ImagePicker.requestMediaLibraryPermissionsAsync();
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Media library permission is required');
+      }
+    } catch (error) {
+      console.error('Media permission error:', error);
+    }
   };
 
-  const uploadPhoto = async () => {
+  const uploadPhoto = useCallback(async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -46,7 +67,6 @@ const FaceDetection = () => {
         const asset = result.assets[0];
         console.log('Selected asset details:', asset);
         
-        // Create a proper file object for React Native FormData
         const selectedImage = {
           uri: asset.uri,
           type: asset.mimeType || 'image/jpeg',
@@ -60,9 +80,9 @@ const FaceDetection = () => {
       console.error('Image picker error:', error);
       Alert.alert('Error', 'Failed to pick image');
     }
-  };
+  }, []);
 
-  const registerUser = async () => {
+  const registerUser = useCallback(async () => {
     if (!name.trim()) {
       Alert.alert('Error', 'Please enter a name');
       return;
@@ -79,95 +99,182 @@ const FaceDetection = () => {
       const formData = new FormData();
       formData.append('name', name.trim());
       
-      // FIXED: Use the third parameter for filename in React Native
       formData.append('photo', {
         uri: photo.uri,
         type: photo.type,
         name: photo.name,
-      }, photo.name);
+      });
+
+      console.log('Sending registration request to:', API_ENDPOINTS.REGISTER);
 
       const response = await fetch(API_ENDPOINTS.REGISTER, {
         method: 'POST',
         body: formData,
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
       });
 
-      const result = await response.json();
-
-      if (response.ok) {
-        Alert.alert('Success', result.message || 'User registered successfully!');
-        setName('');
-        setPhoto(null);
-      } else {
-        Alert.alert('Error', result.error || result.message || 'Registration failed');
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Server error: ${response.status} - ${errorText}`);
       }
+
+      const result = await response.json();
+      console.log('Registration result:', result);
+
+      Alert.alert('Success', result.message || 'User registered successfully!');
+      setName('');
+      setPhoto(null);
     } catch (error) {
       console.error('Registration error:', error);
-      Alert.alert('Error', 'Registration failed. Please try again.');
+      Alert.alert('Error', `Registration failed: ${error.message}`);
     } finally {
       setLoading(false);
     }
-  };
+  }, [name, photo]);
 
-  const openDetectionCamera = async () => {
-    if (!permission) return;
-    if (!permission.granted) {
-      const response = await requestPermission();
-      if (!response.granted) {
-        Alert.alert('Permission Required', 'Camera permission is required for detection');
-        return;
+  const openDetectionCamera = useCallback(async () => {
+    try {
+      if (!permission) {
+        console.log('Requesting camera permission...');
+        const response = await requestPermission();
+        if (!response?.granted) {
+          Alert.alert('Permission Required', 'Camera permission is required for detection');
+          return;
+        }
       }
+      
+      if (!permission?.granted) {
+        console.log('Camera permission not granted, requesting...');
+        const response = await requestPermission();
+        if (!response?.granted) {
+          Alert.alert('Permission Required', 'Camera permission is required for detection');
+          return;
+        }
+      }
+      
+      console.log('Opening camera for detection...');
+      setCameraVisible(true);
+    } catch (error) {
+      console.error('Camera permission error:', error);
+      Alert.alert('Error', 'Failed to access camera');
     }
-    setCameraVisible(true);
-  };
+  }, [permission, requestPermission]);
 
-  const captureAndDetect = async () => {
-    if (camera) {
-      try {
-        setLoading(true);
-        const captured = await camera.takePictureAsync({
-          quality: 0.8,
-          base64: false,
-        });
+  const captureAndDetect = useCallback(async () => {
+    if (!camera) {
+      Alert.alert('Error', 'Camera not ready');
+      return;
+    }
 
-        const formData = new FormData();
-        formData.append('image', {
-          uri: captured.uri,
-          type: 'image/jpeg',
-          name: 'detection.jpg',
-        });
+    try {
+      setLoading(true);
+      console.log('Capturing image for detection...');
+      
+      const captured = await camera.takePictureAsync({
+        quality: 0.8,
+        base64: false,
+        skipProcessing: false,
+      });
 
-        const response = await fetch(API_ENDPOINTS.DETECT, {
-          method: 'POST',
-          body: formData,
-        });
+      if (!captured || !captured.uri) {
+        throw new Error('Failed to capture image');
+      }
 
-        const result = await response.json();
+      console.log('Captured image:', captured);
 
-        if (response.ok) {
+      // Create form data with the correct format for React Native
+      const formData = new FormData();
+      
+      // Use the exact format that React Native expects for file uploads
+      formData.append('photo', {
+        uri: captured.uri,
+        type: 'image/jpeg',
+        name: 'photo.jpg',
+      });
+
+      console.log('FormData created with photo field');
+      console.log('Sending detection request to:', API_ENDPOINTS.DETECT);
+
+      // Add timeout to the fetch request
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        controller.abort();
+        console.log('Request timed out after 30 seconds');
+      }, 30000); // 30 second timeout
+
+      const response = await fetch(API_ENDPOINTS.DETECT, {
+        method: 'POST',
+        body: formData,
+        signal: controller.signal,
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      clearTimeout(timeoutId);
+      console.log('Response received:', response.status, response.statusText);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.log('Error response body:', errorText);
+        throw new Error(`Server error: ${response.status} - ${errorText}`);
+      }
+
+      const result = await response.json();
+      console.log('Detection result:', result);
+
+      // Handle the actual backend response format
+      if (result.faces_detected > 0) {
+        if (result.recognition && result.recognition.recognized) {
           Alert.alert(
             'Detection Result',
-            result.detected ? `Face detected: ${result.name}` : 'No face detected'
+            `Face detected: ${result.recognition.user_name}\nConfidence: ${(result.recognition.confidence * 100).toFixed(1)}%`
           );
         } else {
-          Alert.alert('Error', result.message || 'Detection failed');
+          Alert.alert('Detection Result', 'Face detected but not recognized');
         }
-
-        setCameraVisible(false);
-      } catch (_error) {
-        Alert.alert('Error', 'Detection failed. Please try again.');
-      } finally {
-        setLoading(false);
+      } else {
+        Alert.alert('Detection Result', 'No face detected');
       }
+
+      setCameraVisible(false);
+      setCamera(null);
+    } catch (error) {
+      console.error('Detection error details:', error);
+      
+      if (error.name === 'AbortError') {
+        Alert.alert('Error', 'Request timed out. Please check your network connection.');
+      } else if (error.message.includes('Network request failed')) {
+        Alert.alert('Error', 'Network error. Please check if the server is running and accessible.');
+      } else {
+        Alert.alert('Error', `Detection failed: ${error.message}`);
+      }
+    } finally {
+      setLoading(false);
     }
-  };
+  }, [camera]);
+
+
+
+  const closeCameraHandler = useCallback(() => {
+    setCameraVisible(false);
+    setCamera(null);
+  }, []);
+
+  const onCameraReady = useCallback(() => {
+    console.log('Camera is ready');
+  }, []);
 
   if (cameraVisible) {
     return (
       <View style={styles.cameraContainer}>
-        <Camera
+        <CameraView
           style={styles.camera}
           ref={setCamera}
           facing="front"
+          onCameraReady={onCameraReady}
         >
           <View style={styles.cameraButtonContainer}>
             <TouchableOpacity
@@ -183,12 +290,12 @@ const FaceDetection = () => {
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.closeCameraButton}
-              onPress={() => setCameraVisible(false)}
+              onPress={closeCameraHandler}
             >
               <Text style={styles.closeCameraButtonText}>Close</Text>
             </TouchableOpacity>
           </View>
-        </Camera>
+        </CameraView>
       </View>
     );
   }
