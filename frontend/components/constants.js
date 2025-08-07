@@ -5,9 +5,9 @@ export const API_BASE_URL = 'http://localhost:5000/api';
 // Android Emulator: 'http://10.0.2.2:5000/api'
 // Physical Device: 'http://YOUR_IP_ADDRESS:5000/api'
 
-export const API_ENDPOINTS = {
-  REGISTER: `${API_BASE_URL}/register`,
-  DETECT: `${API_BASE_URL}/detect`,
+const API_ENDPOINTS = {
+  REGISTER: 'http://10.196.57.169:5000/api/register', // Replace with your actual server URL
+  DETECT: 'http://10.196.57.169:5000/api/detect',     // Replace with your actual server URL
 };
 
 // Colors
