@@ -1,8 +1,6 @@
-
-import FaceDetectionApp from '../../components/FaceDetectionApp';
-
 import React from 'react';
 import { StatusBar } from 'expo-status-bar';
+import FaceDetectionApp from '../../components/FaceDetection';
 
 
 export default function App() {
