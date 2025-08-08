@@ -237,7 +237,7 @@ const FaceDetection = () => {
           // Face detected but not recognized
           const message = result.recognition?.message || 'Face detected but not recognized';
           Alert.alert(
-            'Face Detected ❓',
+            'Face Detected',
             `${message}\n\nPlease register first or try again with better lighting.`
           );
         }
