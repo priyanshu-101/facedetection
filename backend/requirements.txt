@@ -1,7 +1,6 @@
-setuptools>=42
-wheel
-cmake
-dlib
+setuptools==69.5.1
+wheel==0.43.0
+cmake==3.27.9
 Flask==2.3.3
 Flask-CORS==4.0.0
 pymongo==4.5.0
