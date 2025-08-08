@@ -223,20 +223,26 @@ const FaceDetection = () => {
       }
 
       const result = await response.json();
-      console.log('Detection result:', result);
+      console.log('Detection result:', JSON.stringify(result, null, 2));
 
       // Handle the actual backend response format
       if (result.faces_detected > 0) {
-        if (result.recognition && result.recognition.recognized) {
+        if (result.recognition && result.recognition.recognized === true) {
+          // User recognized successfully
           Alert.alert(
-            'Detection Result',
-            `Face detected: ${result.recognition.user_name}\nConfidence: ${(result.recognition.confidence * 100).toFixed(1)}%`
+            'Recognition Successful! 🎉',
+            `Welcome back, ${result.recognition.user_name}!\n\nConfidence: ${(result.recognition.confidence * 100).toFixed(1)}%\nMethod: ${result.recognition.method}`
           );
         } else {
-          Alert.alert('Detection Result', 'Face detected but not recognized');
+          // Face detected but not recognized
+          const message = result.recognition?.message || 'Face detected but not recognized';
+          Alert.alert(
+            'Face Detected ❓',
+            `${message}\n\nPlease register first or try again with better lighting.`
+          );
         }
       } else {
-        Alert.alert('Detection Result', 'No face detected');
+        Alert.alert('No Face Detected 😞', 'Please ensure your face is clearly visible and try again.');
       }
 
       setCameraVisible(false);
