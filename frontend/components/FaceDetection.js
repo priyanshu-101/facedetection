@@ -230,7 +230,7 @@ const FaceDetection = () => {
         if (result.recognition && result.recognition.recognized === true) {
           // User recognized successfully
           Alert.alert(
-            'Recognition Successful! 🎉',
+            'Recognition Successful! ',
             `Welcome back, ${result.recognition.user_name}!\n\nConfidence: ${(result.recognition.confidence * 100).toFixed(1)}%\nMethod: ${result.recognition.method}`
           );
         } else {
